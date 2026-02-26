@@ -1,0 +1,76 @@
+# ============================================================
+#  WIG20 Sentiment Analysis — Główna konfiguracja projektu
+# ============================================================
+
+project:
+  name: "WIG20 Sentiment Analysis"
+  version: "0.1.0"
+
+tickers:
+  - symbol: "PKN.WA"
+    name: "PKN Orlen"
+    keywords: ["Orlen", "PKN", "PKN Orlen"]
+  - symbol: "PKO.WA"
+    name: "PKO BP"
+    keywords: ["PKO", "PKO BP", "PKO Bank"]
+  - symbol: "PZU.WA"
+    name: "PZU"
+    keywords: ["PZU", "PZU SA"]
+  - symbol: "KGH.WA"
+    name: "KGHM"
+    keywords: ["KGHM"]
+  - symbol: "LPP.WA"
+    name: "LPP"
+    keywords: ["LPP", "Reserved", "Cropp"]
+  - symbol: "CDR.WA"
+    name: "CD Projekt"
+    keywords: ["CD Projekt", "CDPR", "Cyberpunk", "Wiedźmin"]
+  - symbol: "ALE.WA"
+    name: "Allegro"
+    keywords: ["Allegro"]
+  - symbol: "MBK.WA"
+    name: "mBank"
+    keywords: ["mBank"]
+  - symbol: "DNP.WA"
+    name: "Dino Polska"
+    keywords: ["Dino", "Dino Polska"]
+  - symbol: "CPS.WA"
+    name: "Cyfrowy Polsat"
+    keywords: ["Cyfrowy Polsat", "Polsat"]
+
+sources:
+  bankier:
+    base_url: "https://www.bankier.pl"
+    news_url: "https://www.bankier.pl/gielda/wiadomosci-gieldowe/wszystkie"
+    enabled: true
+  money:
+    base_url: "https://www.money.pl"
+    news_url: "https://www.money.pl/gielda/"
+    enabled: true
+  stockwatch:
+    base_url: "https://stockwatch.pl"
+    news_url: "https://stockwatch.pl/wiadomosci/"
+    enabled: true
+
+ingestion:
+  days_back: 90
+  request_delay: 2.0     # Opóźnienie między requestami — nie spamuj serwera!
+  max_articles_per_source: 200
+
+nlp:
+  model: "finbert"
+  finbert_model: "ProsusAI/finbert"
+  translation_enabled: true   # Tłumacz PL->EN przed FinBERT
+  batch_size: 16
+
+econometrics:
+  max_lag_days: 10
+  significance_level: 0.05
+  price_column: "Close"
+  return_type: "log"          # "log" lub "pct"
+
+paths:
+  raw_news: "data/raw/news_raw.csv"
+  raw_prices: "data/raw/prices_raw.csv"
+  sentiment_daily: "data/processed/sentiment_daily.csv"
+  merged: "data/processed/merged_dataset.csv"
