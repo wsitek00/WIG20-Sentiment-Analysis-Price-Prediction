@@ -124,7 +124,7 @@ wig20-sentiment/
 
 ### Instalacja
 ```bash
-git clone https://github.com/twoj-nick/wig20-sentiment.git
+git clone https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction.git
 cd wig20-sentiment
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
