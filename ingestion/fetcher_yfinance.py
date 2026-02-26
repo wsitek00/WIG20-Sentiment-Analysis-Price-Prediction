@@ -1,5 +1,6 @@
 """
 Pobieranie cen spółek WIG20 przez yfinance.
+Kompatybilne z yfinance >= 1.0.0
 """
 import yfinance as yf
 import pandas as pd
@@ -14,16 +15,8 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 def fetch_prices(days: int = 90, config_path: str = "config.yaml") -> pd.DataFrame:
-    """
-    Pobiera historyczne ceny zamknięcia i wolumen dla wszystkich spółek z config.yaml.
-
-    Returns:
-        DataFrame z kolumnami: date, ticker, name, Open, High, Low, Close, Volume
-    """
-    import requests as req
     config = load_config(config_path)
     tickers_config = config["tickers"]
-    price_col = config["econometrics"]["price_column"]
 
     end_date = datetime.today()
     start_date = end_date - timedelta(days=days)
@@ -31,17 +24,7 @@ def fetch_prices(days: int = 90, config_path: str = "config.yaml") -> pd.DataFra
     symbols = [t["symbol"] for t in tickers_config]
     name_map = {t["symbol"]: t["name"] for t in tickers_config}
 
-    logger.info(f"Pobieranie danych dla {len(symbols)} spółek naraz...")
-
-    # Tworzymy sesję z nagłówkami przeglądarki — obejście blokady Yahoo
-    session = req.Session()
-    session.headers.update({
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    })
+    logger.info(f"Pobieranie danych dla {len(symbols)} spolok naraz...")
 
     try:
         raw = yf.download(
@@ -50,25 +33,22 @@ def fetch_prices(days: int = 90, config_path: str = "config.yaml") -> pd.DataFra
             end=end_date.strftime("%Y-%m-%d"),
             progress=False,
             auto_adjust=True,
-            group_by="ticker",
-            session=session
         )
     except Exception as e:
-        logger.error(f"Błąd pobierania danych: {e}")
+        logger.error(f"Blad pobierania danych: {e}")
         return pd.DataFrame()
 
     if raw.empty:
-        logger.error("yfinance zwróciło pusty DataFrame.")
+        logger.error("yfinance zwrocilo pusty DataFrame.")
         return pd.DataFrame()
 
-    # Rozpakuj MultiIndex kolumn na osobne DataFrame'y per ticker
     all_data = []
     for symbol in symbols:
         try:
-            if len(symbols) == 1:
-                df = raw.copy()
+            if isinstance(raw.columns, pd.MultiIndex):
+                df = raw.xs(symbol, axis=1, level=1).copy()
             else:
-                df = raw[symbol].copy()
+                df = raw.copy()
 
             df = df.dropna(subset=["Close"])
             if df.empty:
@@ -77,6 +57,7 @@ def fetch_prices(days: int = 90, config_path: str = "config.yaml") -> pd.DataFra
 
             df = df.reset_index()
             df.rename(columns={"Date": "date"}, inplace=True)
+            df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None).dt.normalize()
             df["ticker"] = symbol
             df["name"] = name_map.get(symbol, symbol)
             df["log_return"] = df["Close"].pct_change()
@@ -84,17 +65,17 @@ def fetch_prices(days: int = 90, config_path: str = "config.yaml") -> pd.DataFra
             cols = ["date", "ticker", "name", "Open", "High", "Low", "Close", "Volume", "log_return"]
             cols_available = [c for c in cols if c in df.columns]
             all_data.append(df[cols_available])
-            logger.info(f"  ✓ {symbol}: {len(df)} sesji")
+            logger.info(f"  OK {symbol} ({name_map.get(symbol, '')}): {len(df)} sesji")
 
         except Exception as e:
             logger.warning(f"Problem z {symbol}: {e}")
 
     if not all_data:
-        logger.error("Nie pobrano żadnych danych cenowych!")
+        logger.error("Nie pobrano zadnych danych cenowych!")
         return pd.DataFrame()
 
     result = pd.concat(all_data, ignore_index=True)
-    logger.success(f"Pobrano {len(result)} rekordów cenowych dla {len(all_data)} spółek.")
+    logger.success(f"Pobrano lacznie {len(result)} rekordow dla {len(all_data)} spolek.")
     return result
 
 
@@ -107,5 +88,8 @@ def save_prices(df: pd.DataFrame, output_path: str = "data/raw/prices_raw.csv") 
 
 if __name__ == "__main__":
     df = fetch_prices(days=90)
-    print(df.head(10))
+    if not df.empty:
+        print(df.head(10))
+        print(f"\nSpolki: {df['ticker'].unique()}")
+        print(f"Zakres dat: {df['date'].min()} -> {df['date'].max()}")
     save_prices(df)
