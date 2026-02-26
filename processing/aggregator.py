@@ -30,6 +30,7 @@ def create_merged_dataset(config_path: str = "config.yaml") -> pd.DataFrame:
     # Wczytaj dane
     prices = pd.read_csv(prices_path, parse_dates=["date"])
     sentiment = pd.read_csv(sentiment_path, parse_dates=["date"])
+    sentiment.rename(columns={"ticker_mentioned": "ticker"}, inplace=True)
 
     logger.info(f"Ceny: {len(prices)} wierszy | Sentyment: {len(sentiment)} wierszy")
 

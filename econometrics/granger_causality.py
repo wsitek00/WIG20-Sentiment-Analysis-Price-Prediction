@@ -18,6 +18,9 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 def check_stationarity(series: pd.Series, name: str) -> bool:
+    if series.dropna().nunique() < 2:
+        logger.warning(f"ADF [{name}]: seria stała — pomijam test.")
+        return False
     """Test ADF na stacjonarność szeregu — warunek dla testu Grangera."""
     result = adfuller(series.dropna())
     p_value = result[1]
@@ -48,6 +51,11 @@ def run_granger_for_ticker(
 
     logger.info(f"\n{'='*50}")
     logger.info(f"Test Grangera dla: {ticker} (n={len(df_ticker)})")
+
+    # Pomiń jeśli sentyment jest stały (za mało newsów)
+    if df_ticker["sentiment_mean"].dropna().nunique() < 2:
+        logger.warning(f"{ticker}: sentyment stały (za mało newsów) — pomijam.")
+        return pd.DataFrame()
 
     # Sprawdź stacjonarność
     check_stationarity(df_ticker["log_return"], f"{ticker} log_return")
