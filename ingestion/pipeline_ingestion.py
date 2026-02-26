@@ -1,12 +1,13 @@
 """
 Orkiestrator modułu Ingestion.
-Uruchamia wszystkie scrapery i łączy dane w jeden plik.
+Źródła: Bankier.pl (RSS, bieżące) + Stooq.pl (historia per spółka)
 """
 import pandas as pd
 import os
 import yaml
 from loguru import logger
 from ingestion.scraper_bankier import scrape_bankier
+from ingestion.scraper_stooq import scrape_stooq
 from ingestion.fetcher_yfinance import fetch_prices, save_prices
 
 
@@ -19,31 +20,26 @@ def run_ingestion(days: int = 90, config_path: str = "config.yaml") -> None:
     config = load_config(config_path)
     os.makedirs("data/raw", exist_ok=True)
 
-    # --- 1. Pobierz ceny ---
+    # 1. Ceny
     logger.info("Pobieranie cen spółek WIG20...")
     prices_df = fetch_prices(days=days, config_path=config_path)
     save_prices(prices_df, config["paths"]["raw_prices"])
 
-    # --- 2. Pobierz newsy ---
-    all_news = []
+    # 2. Newsy — Bankier RSS (bieżące)
+    logger.info("Scraping: Bankier.pl RSS...")
+    bankier_df = scrape_bankier(days_back=days, config_path=config_path)
 
-    if config["sources"]["bankier"]["enabled"]:
-        logger.info("Scraping: Bankier.pl...")
-        bankier_df = scrape_bankier(max_pages=10, config_path=config_path)
-        all_news.append(bankier_df)
+    # 3. Newsy — Stooq (historia per spółka)
+    logger.info("Scraping: Stooq.pl...")
+    stooq_df = scrape_stooq(days_back=days, config_path=config_path)
 
-    # Tutaj możesz dodać kolejne scrapery:
-    # if config["sources"]["money"]["enabled"]:
-    #     from ingestion.scraper_money import scrape_money
-    #     all_news.append(scrape_money(...))
+    # 4. Połącz i zapisz
+    all_news = pd.concat([bankier_df, stooq_df], ignore_index=True)
+    all_news.drop_duplicates(subset=["title", "source"], inplace=True)
+    all_news.to_csv(config["paths"]["raw_news"], index=False)
 
-    if all_news:
-        news_df = pd.concat(all_news, ignore_index=True)
-        news_df.drop_duplicates(subset=["title", "source"], inplace=True)
-        news_df.to_csv(config["paths"]["raw_news"], index=False)
-        logger.success(f"Zapisano {len(news_df)} artykułów do {config['paths']['raw_news']}")
-    else:
-        logger.warning("Brak artykułów do zapisania.")
+    logger.success(f"Zapisano {len(all_news)} artykułów do {config['paths']['raw_news']}")
+    logger.info(f"Per spółka:\n{all_news['ticker_mentioned'].value_counts(dropna=False).to_string()}")
 
 
 if __name__ == "__main__":

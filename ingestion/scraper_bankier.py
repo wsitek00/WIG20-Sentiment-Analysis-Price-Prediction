@@ -1,22 +1,23 @@
 """
-Scraper nagłówków newsów z Bankier.pl
+Pobieranie newsów z Bankier.pl przez RSS feed.
+RSS jest niezawodny, daje czyste dane z datą — lepszy niż scraping HTML.
 """
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
 import yaml
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 from loguru import logger
 
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
-}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+RSS_FEEDS = [
+    "https://www.bankier.pl/rss/wiadomosci.xml",
+    "https://www.bankier.pl/rss/gielda.xml",
+]
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -24,78 +25,72 @@ def load_config(path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-def scrape_bankier(max_pages: int = 10, config_path: str = "config.yaml") -> pd.DataFrame:
+def scrape_bankier(days_back: int = 90, config_path: str = "config.yaml") -> pd.DataFrame:
     """
-    Scrape nagłówków z Bankier.pl — sekcja wiadomości giełdowych.
+    Pobiera newsy z Bankier.pl przez RSS.
 
     Returns:
-        DataFrame z kolumnami: title, url, published_at, source, ticker_mentioned
+        DataFrame: title, url, published_at, source, ticker_mentioned
     """
     config = load_config(config_path)
-    base_url = config["sources"]["bankier"]["base_url"]
-    news_url = config["sources"]["bankier"]["news_url"]
-    delay = config["ingestion"]["request_delay"]
     tickers = config["tickers"]
+    cutoff_date = datetime.now() - timedelta(days=days_back)
 
     articles = []
 
-    for page in range(1, max_pages + 1):
-        url = f"{news_url}?page={page}" if page > 1 else news_url
-        logger.info(f"Bankier.pl — strona {page}: {url}")
-
+    for feed_url in RSS_FEEDS:
+        logger.info(f"Pobieranie RSS: {feed_url}")
         try:
-            response = requests.get(url, headers=HEADERS, timeout=10)
+            response = requests.get(feed_url, headers=HEADERS, timeout=10)
             response.raise_for_status()
         except requests.RequestException as e:
-            logger.error(f"Błąd przy pobieraniu strony {page}: {e}")
-            break
+            logger.error(f"Błąd RSS {feed_url}: {e}")
+            continue
 
-        soup = BeautifulSoup(response.text, "lxml")
+        soup = BeautifulSoup(response.text, "xml")
+        items = soup.find_all("item")
+        logger.info(f"  Znaleziono {len(items)} artykułów")
 
-        # Bankier.pl — artykuły są w tagach <article> lub <div class="...">
-        # Struktura może się zmieniać — sprawdź w DevTools przeglądarki
-        news_items = soup.find_all("article", class_=lambda c: c and "article" in c.lower())
+        for item in items:
+            title_tag = item.find("title")
+            link_tag = item.find("link")
+            date_tag = item.find("pubDate")
 
-        if not news_items:
-            # Alternatywny selektor
-            news_items = soup.select("div.C_NL-Item-Article, div.news-item, li.article")
-
-        if not news_items:
-            logger.warning(f"Brak artykułów na stronie {page} — możliwa zmiana struktury HTML.")
-            break
-
-        for item in news_items:
-            title_tag = item.find("a") or item.find("h2") or item.find("h3")
             if not title_tag:
                 continue
 
             title = title_tag.get_text(strip=True)
-            link = title_tag.get("href", "")
-            if link and not link.startswith("http"):
-                link = base_url + link
+            url = link_tag.get_text(strip=True) if link_tag else ""
 
-            # Znajdź datę publikacji
-            date_tag = item.find("time") or item.find(class_=lambda c: c and "date" in str(c).lower())
+            # Parsuj datę z formatu RFC 2822 (standard RSS)
             published_at = None
             if date_tag:
-                published_at = date_tag.get("datetime") or date_tag.get_text(strip=True)
+                try:
+                    published_at = parsedate_to_datetime(date_tag.get_text(strip=True))
+                    # Pomiń artykuły starsze niż cutoff
+                    if published_at.replace(tzinfo=None) < cutoff_date:
+                        continue
+                except Exception:
+                    published_at = None
 
-            # Sprawdź, której spółki dotyczy artykuł
             ticker_mentioned = _find_mentioned_ticker(title, tickers)
 
             articles.append({
                 "title": title,
-                "url": link,
-                "published_at": published_at,
+                "url": url,
+                "published_at": published_at.isoformat() if published_at else None,
                 "source": "bankier",
                 "ticker_mentioned": ticker_mentioned,
                 "scraped_at": datetime.now().isoformat()
             })
 
-        time.sleep(delay)  # Szanuj serwer!
+        time.sleep(1)
 
     df = pd.DataFrame(articles)
-    logger.success(f"Bankier.pl: zebrano {len(df)} artykułów.")
+    if not df.empty:
+        df.drop_duplicates(subset=["title"], inplace=True)
+
+    logger.success(f"Bankier.pl RSS: zebrano {len(df)} artykułów.")
     return df
 
 
@@ -106,10 +101,10 @@ def _find_mentioned_ticker(title: str, tickers: list) -> str | None:
         for keyword in ticker_info["keywords"]:
             if keyword.lower() in title_lower:
                 return ticker_info["symbol"]
-    return None  # Artykuł ogólny (makro, rynek)
+    return None  # Artykuł ogólny (makro, rynek) — też wartościowy!
 
 
 if __name__ == "__main__":
-    df = scrape_bankier(max_pages=3)
-    print(df.head())
-    print(f"\nSpółki wymienione:\n{df['ticker_mentioned'].value_counts()}")
+    df = scrape_bankier(days_back=90)
+    print(df[["title", "published_at", "ticker_mentioned"]].to_string())
+    print(f"\nSpółki wymienione:\n{df['ticker_mentioned'].value_counts(dropna=False)}")
