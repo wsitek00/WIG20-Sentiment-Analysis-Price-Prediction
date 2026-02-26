@@ -106,7 +106,7 @@ def run_sentiment(config_path: str = "config.yaml") -> None:
     ]
 
     # Krok 3: Agregacja do dziennego sentymentu per spółka
-    df["date"] = pd.to_datetime(df["published_at"], errors="coerce").dt.date
+    df["date"] = pd.to_datetime(df["published_at"], errors="coerce", utc=True).dt.date
 
     daily_sentiment = (
         df.groupby(["date", "ticker_mentioned"])
