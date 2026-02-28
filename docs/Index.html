@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIG20 Sentiment Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e14;
+      --bg2: #0f1520;
+      --bg3: #141c2e;
+      --accent: #00d4aa;
+      --accent2: #e85d3a;
+      --accent3: #5b8fff;
+      --text: #e8edf5;
+      --text-muted: #6b7a99;
+      --border: #1e2a42;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    /* GRID BACKGROUND */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 16px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(10, 14, 20, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--accent); }
+
+    /* HERO */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 120px 48px 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .hero-tag {
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hero-tag::before {
+      content: '';
+      display: inline-block;
+      width: 32px;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: clamp(48px, 7vw, 96px);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      margin-bottom: 32px;
+    }
+
+    h1 span.accent { color: var(--accent); }
+    h1 span.accent2 { color: var(--accent2); }
+
+    .hero-desc {
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin-bottom: 48px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: 1px solid;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: transparent;
+      color: var(--accent);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* TICKER STRIP */
+    .ticker-strip {
+      position: relative;
+      z-index: 1;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      padding: 12px 0;
+      margin-bottom: 80px;
+    }
+
+    .ticker-inner {
+      display: flex;
+      gap: 48px;
+      animation: ticker 20s linear infinite;
+      white-space: nowrap;
+    }
+
+    .ticker-item {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ticker-item .up { color: var(--accent); }
+    .ticker-item .down { color: var(--accent2); }
+
+    @keyframes ticker {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    /* STATS */
+    .stats {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto 100px;
+      padding: 0 48px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .stat {
+      background: var(--bg2);
+      padding: 40px 32px;
+      transition: background 0.2s;
+    }
+
+    .stat:hover { background: var(--bg3); }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 48px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-value.green { color: var(--accent); }
+    .stat-value.red { color: var(--accent2); }
+    .stat-value.blue { color: var(--accent3); }
+
+    .stat-label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* SECTION */
+    .section {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto 100px;
+      padding: 0 48px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 48px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-num {
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.2em;
+    }
+
+    h2 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 32px;
+      letter-spacing: -0.02em;
+    }
+
+    /* PIPELINE */
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+
+    .pipeline-step {
+      background: var(--bg2);
+      padding: 32px 24px;
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .pipeline-step:hover { background: var(--bg3); }
+
+    .pipeline-step::after {
+      content: '→';
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent);
+      font-size: 16px;
+      z-index: 2;
+    }
+
+    .pipeline-step:last-child::after { display: none; }
+
+    .step-num {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .step-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .step-desc {
+      font-size: 11px;
+      line-height: 1.7;
+      color: var(--text-muted);
+    }
+
+    .step-tech {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-size: 10px;
+      padding: 3px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* RESULTS */
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .result-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .result-card:hover { border-color: var(--accent); }
+
+    .result-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+
+    .result-card.green::before { background: var(--accent); }
+    .result-card.red::before { background: var(--accent2); }
+    .result-card.blue::before { background: var(--accent3); }
+
+    .result-ticker {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .result-ticker .dot { color: var(--text-muted); font-weight: 400; }
+
+    .result-finding {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .result-metrics {
+      display: flex;
+      gap: 24px;
+    }
+
+    .metric {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .metric-val {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--accent);
+    }
+
+    .metric-val.red { color: var(--accent2); }
+
+    .metric-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* CHART PLACEHOLDER */
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .chart-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 24px;
+    }
+
+    .chart-box img {
+      width: 100%;
+      height: auto;
+      display: block;
+      opacity: 0.9;
+      filter: brightness(0.95) contrast(1.05);
+      transition: opacity 0.2s;
+    }
+
+    .chart-box:hover img { opacity: 1; }
+
+    .chart-caption {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* CODE BLOCK */
+    .code-block {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 24px 28px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--text-muted);
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    .code-block .kw { color: var(--accent3); }
+    .code-block .str { color: var(--accent); }
+    .code-block .cm { color: #3d5066; }
+
+    /* LIMITATIONS */
+    .limitations {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .lim-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 28px;
+    }
+
+    .lim-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lim-title .icon { color: var(--accent2); }
+    .lim-title .icon-ok { color: var(--accent); }
+
+    .lim-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .lim-list li {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .lim-list li::before {
+      content: '—';
+      position: absolute;
+      left: 0;
+      color: var(--border);
+    }
+
+    /* FOOTER */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-left {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+
+    .footer-left strong {
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+
+    /* ANIMATIONS */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero > * {
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .hero > *:nth-child(1) { animation-delay: 0.1s; }
+    .hero > *:nth-child(2) { animation-delay: 0.2s; }
+    .hero > *:nth-child(3) { animation-delay: 0.3s; }
+    .hero > *:nth-child(4) { animation-delay: 0.4s; }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 24px; }
+      .nav-links { display: none; }
+      .hero { padding: 100px 24px 60px; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .section { padding: 0 24px; }
+      .pipeline { grid-template-columns: 1fr; }
+      .pipeline-step::after { display: none; }
+      .results-grid { grid-template-columns: 1fr; }
+      .chart-row { grid-template-columns: 1fr; }
+      .limitations { grid-template-columns: 1fr; }
+      footer { flex-direction: column; gap: 24px; padding: 32px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-logo">WIG20 · Sentiment</div>
+    <ul class="nav-links">
+      <li><a href="#pipeline">Pipeline</a></li>
+      <li><a href="#results">Wyniki</a></li>
+      <li><a href="#methodology">Metodologia</a></li>
+      <li><a href="https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction" target="_blank">GitHub →</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-tag">Projekt badawczy · Informatyka i Ekonometria</div>
+    <h1>
+      Sentyment<br>
+      <span class="accent">Mediów</span> vs<br>
+      Ceny <span class="accent2">WIG20</span>
+    </h1>
+    <p class="hero-desc">
+      System automatycznie pobiera nagłówki z polskich portali finansowych,
+      analizuje je modelem FinBERT i bada — czy media finansowe
+      <em>poprzedzają</em> ruchy cen akcji na GPW.
+    </p>
+    <div class="hero-cta">
+      <a href="https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction"
+         target="_blank" class="btn btn-primary">
+        ⟶ Zobacz kod na GitHub
+      </a>
+      <a href="#results" class="btn btn-secondary">Wyniki badania</a>
+    </div>
+  </section>
+
+  <!-- TICKER STRIP -->
+  <div class="ticker-strip">
+    <div class="ticker-inner">
+      <span class="ticker-item">PKO.WA <span class="up">▲ +1.2%</span></span>
+      <span class="ticker-item">LPP.WA <span class="up">▲ +2.8%</span></span>
+      <span class="ticker-item">CDR.WA <span class="down">▼ −0.4%</span></span>
+      <span class="ticker-item">KGH.WA <span class="down">▼ −1.1%</span></span>
+      <span class="ticker-item">PKN.WA <span class="up">▲ +0.6%</span></span>
+      <span class="ticker-item">PZU.WA <span class="up">▲ +0.3%</span></span>
+      <span class="ticker-item">ALE.WA <span class="down">▼ −0.7%</span></span>
+      <span class="ticker-item">MBK.WA <span class="up">▲ +1.5%</span></span>
+      <span class="ticker-item">DNP.WA <span class="up">▲ +0.9%</span></span>
+      <span class="ticker-item">CPS.WA <span class="down">▼ −0.2%</span></span>
+      <!-- duplicate for seamless loop -->
+      <span class="ticker-item">PKO.WA <span class="up">▲ +1.2%</span></span>
+      <span class="ticker-item">LPP.WA <span class="up">▲ +2.8%</span></span>
+      <span class="ticker-item">CDR.WA <span class="down">▼ −0.4%</span></span>
+      <span class="ticker-item">KGH.WA <span class="down">▼ −1.1%</span></span>
+      <span class="ticker-item">PKN.WA <span class="up">▲ +0.6%</span></span>
+      <span class="ticker-item">PZU.WA <span class="up">▲ +0.3%</span></span>
+      <span class="ticker-item">ALE.WA <span class="down">▼ −0.7%</span></span>
+      <span class="ticker-item">MBK.WA <span class="up">▲ +1.5%</span></span>
+      <span class="ticker-item">DNP.WA <span class="up">▲ +0.9%</span></span>
+      <span class="ticker-item">CPS.WA <span class="down">▼ −0.2%</span></span>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value green">8.5%</div>
+      <div class="stat-label">Poprawa RMSE (ARIMAX vs ARIMA)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value blue">10</div>
+      <div class="stat-label">Spółek WIG20 analizowanych</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value green">179</div>
+      <div class="stat-label">Artykułów newsowych (rośnie co tydzień)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value red">p=0.0001</div>
+      <div class="stat-label">Najlepszy wynik testu Grangera</div>
+    </div>
+  </div>
+
+  <!-- PIPELINE -->
+  <section class="section" id="pipeline">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>Architektura Pipeline</h2>
+    </div>
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <div class="step-num">Moduł 01</div>
+        <div class="step-title">Ingestion</div>
+        <div class="step-desc">Automatyczne pobieranie cen GPW i nagłówków z polskich mediów finansowych co tydzień.</div>
+        <div class="step-tech">
+          <span class="tag">yfinance</span>
+          <span class="tag">BeautifulSoup</span>
+          <span class="tag">Google News RSS</span>
+          <span class="tag">Bankier.pl RSS</span>
+        </div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-num">Moduł 02</div>
+        <div class="step-title">NLP</div>
+        <div class="step-desc">Tłumaczenie PL→EN i analiza sentymentu modelem FinBERT. Agregacja do dziennego score per spółka.</div>
+        <div class="step-tech">
+          <span class="tag">FinBERT</span>
+          <span class="tag">HuggingFace</span>
+          <span class="tag">deep-translator</span>
+        </div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-num">Moduł 03</div>
+        <div class="step-title">Ekonometria</div>
+        <div class="step-desc">Test przyczynowości Grangera i model ARIMAX z sentymentem jako zmienną egzogenną.</div>
+        <div class="step-tech">
+          <span class="tag">statsmodels</span>
+          <span class="tag">Granger</span>
+          <span class="tag">ARIMAX</span>
+          <span class="tag">ADF test</span>
+        </div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-num">Moduł 04</div>
+        <div class="step-title">Wizualizacja</div>
+        <div class="step-desc">Notebooki EDA z heatmapami korelacji, wykresami cena vs sentyment i porównaniem modeli.</div>
+        <div class="step-tech">
+          <span class="tag">matplotlib</span>
+          <span class="tag">seaborn</span>
+          <span class="tag">Jupyter</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <span class="cm"># Uruchomienie pełnego pipeline</span><br>
+      <span class="kw">python</span> -m ingestion.pipeline_ingestion &nbsp;&nbsp;<span class="cm"># pobierz ceny + newsy</span><br>
+      <span class="kw">python</span> -m processing.sentiment_finbert &nbsp;<span class="cm"># FinBERT → sentyment</span><br>
+      <span class="kw">python</span> -m processing.aggregator &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># połącz dane + lagi</span><br>
+      <span class="kw">python</span> -m econometrics.granger_causality <span class="cm"># test Grangera</span><br>
+      <span class="kw">python</span> -m econometrics.arimax_model &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># model ARIMAX</span>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="section" id="results">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>Wyniki Badania</h2>
+    </div>
+
+    <div class="results-grid">
+      <div class="result-card green">
+        <div class="result-ticker">LPP<span class="dot">.WA</span></div>
+        <div class="result-finding">
+          Najsilniejszy sygnał w badaniu. Sentyment mediów z poprzedniego dnia
+          istotnie poprzedza zmiany ceny (lag=1). Model ARIMAX z sentymentem
+          osiąga 8.5% niższe RMSE niż baseline ARIMA.
+        </div>
+        <div class="result-metrics">
+          <div class="metric">
+            <span class="metric-val">−8.5%</span>
+            <span class="metric-label">Poprawa RMSE</span>
+          </div>
+          <div class="metric">
+            <span class="metric-val">p=0.0025</span>
+            <span class="metric-label">ARIMAX p-value</span>
+          </div>
+          <div class="metric">
+            <span class="metric-val">lag 1–9</span>
+            <span class="metric-label">Istotne opóźnienia</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-card blue">
+        <div class="result-ticker">CDR<span class="dot">.WA</span></div>
+        <div class="result-finding">
+          CD Projekt wykazuje zależność z opóźnieniem 5–10 dni sesyjnych —
+          media piszą o spółce, a rynek reaguje po 1–2 tygodniach.
+          Sentyment nieistotny w modelu ARIMAX — korelacja ≠ predykcja.
+        </div>
+        <div class="result-metrics">
+          <div class="metric">
+            <span class="metric-val">p=0.0001</span>
+            <span class="metric-label">Granger (lag=7)</span>
+          </div>
+          <div class="metric">
+            <span class="metric-val">6</span>
+            <span class="metric-label">Istotnych lagów</span>
+          </div>
+          <div class="metric">
+            <span class="metric-val red">p=0.82</span>
+            <span class="metric-label">ARIMAX p-value</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="chart-box">
+        <img src="../data/processed/plot_granger_results.png"
+             alt="Wyniki testu Grangera">
+        <div class="chart-caption">
+          Test Grangera — istotność per spółka i opóźnienie.
+          Rozmiar punktu = −log₁₀(p). Czerwony = p &lt; 0.05.
+        </div>
+      </div>
+      <div class="chart-box">
+        <img src="../data/processed/plot_correlation_heatmap.png"
+             alt="Heatmapa korelacji">
+        <div class="chart-caption">
+          Korelacja Pearsona: stopa zwrotu vs sentyment z opóźnieniem 1–6 dni.
+          LPP.WA wyróżnia się wartością −0.77 przy lag=1.
+        </div>
+      </div>
+      <div class="chart-box">
+        <img src="../data/processed/plot_LPP_rmse_comparison.png"
+             alt="ARIMAX vs ARIMA RMSE">
+        <div class="chart-caption">
+          Porównanie RMSE: ARIMA (baseline) vs ARIMAX z sentymentem.
+          Redukcja błędu prognozy o 8.5% dla LPP.WA.
+        </div>
+      </div>
+      <div class="chart-box">
+        <img src="../data/processed/plot_LPP_arimax_vs_arima.png"
+             alt="ARIMAX prognoza LPP">
+        <div class="chart-caption">
+          Prognoza ARIMAX vs rzeczywiste stopy zwrotu LPP.WA.
+          Górny panel: prognozy. Dolny panel: sentyment (zmienna egzogenna X).
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- METHODOLOGY -->
+  <section class="section" id="methodology">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>Metodologia</h2>
+    </div>
+
+    <div class="limitations">
+      <div class="lim-card">
+        <div class="lim-title">
+          <span class="icon-ok">✦</span> Co projekt robi
+        </div>
+        <ul class="lim-list">
+          <li>Pobiera ceny 10 spółek WIG20 przez yfinance (dane dzienne OHLCV)</li>
+          <li>Scraping newsów: Bankier.pl RSS + Google News RSS per spółka</li>
+          <li>Tłumaczenie PL→EN i analiza sentymentu FinBERT (score [-1, +1])</li>
+          <li>Agregacja dziennego sentymentu + lagi 1–6 dni sesyjnych</li>
+          <li>Test ADF (stacjonarność) + test Grangera dla lagów 1–10</li>
+          <li>Grid search rzędu ARIMA + porównanie ARIMA vs ARIMAX na test secie (20%)</li>
+          <li>Automatyczne odświeżanie danych co tydzień (Windows Task Scheduler)</li>
+        </ul>
+      </div>
+      <div class="lim-card">
+        <div class="lim-title">
+          <span class="icon">⚠</span> Ograniczenia i plany
+        </div>
+        <ul class="lim-list">
+          <li>Mała próba (~57 sesji) — wyniki wymagają walidacji na dłuższym szeregu</li>
+          <li>FinBERT wytrenowany na tekstach angielskich — tłumaczenie PL→EN wprowadza szum</li>
+          <li>Pojedynczy split train/test zamiast rolling window cross-validation</li>
+          <li>Planowane: porównanie FinBERT vs HerBERT (polski BERT od Allegro)</li>
+          <li>Planowane: rozszerzenie historii do 2 lat gdy Task Scheduler zbierze dane</li>
+          <li>Planowane: interaktywny dashboard Plotly/Dash</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-left">
+      <strong>Wojciech Sitek</strong><br>
+      Student Informatyki i Ekonometrii<br>
+      Projekt edukacyjny · dane wyłącznie do celów badawczych
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction" target="_blank">GitHub</a>
+      <a href="https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction/blob/main/notebooks/01_EDA.ipynb" target="_blank">Notebook EDA</a>
+      <a href="https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction/blob/main/notebooks/03_ARIMAX_Results.ipynb" target="_blank">Notebook ARIMAX</a>
+    </div>
+  </footer>
+
+</body>
+</html>
