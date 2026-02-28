@@ -1,15 +1,47 @@
 # 📈 WIG20 Sentiment Analysis & Price Prediction
 
-> **Projekt portfolio** — analiza wpływu sentymentu medialnego na notowania spółek WIG20  
+> Analiza wpływu sentymentu mediów finansowych na notowania spółek WIG20  
 > *Informatyka i Ekonometria | Python · NLP · Ekonometria*
 
 ---
 
 ## 🎯 Cel Projektu
 
-System automatycznie pobiera nagłówki newsów z polskich portali finansowych, przetwarza je modelem NLP (FinBERT), a następnie bada statystyczną zależność między sentymentem medialnym a zmianami cen akcji spółek z indeksu WIG20.
+System automatycznie pobiera nagłówki newsów z polskich portali finansowych (Bankier.pl, Google News), przetwarza je modelem NLP **FinBERT**, a następnie bada statystyczną zależność między sentymentem medialnym a zmianami cen akcji spółek z indeksu WIG20.
 
-**Hipoteza badawcza:** *Czy negatywny sentyment w polskich mediach finansowych poprzedza (w sensie Grangera) spadki cen spółek WIG20 z opóźnieniem 24–48h?*
+**Hipoteza badawcza:** *Czy sentyment polskich mediów finansowych poprzedza (w sensie Grangera) zmiany cen spółek WIG20?*
+
+**Odpowiedź:** ✅ Tak — dla LPP.WA i CDR.WA sentyment statystycznie poprzedza ruchy cen, a model ARIMAX z sentymentem osiąga **8.5% niższe RMSE** niż baseline.
+
+---
+
+## 📊 Wyniki
+
+### Test Przyczynowości Grangera
+Sentyment mediów **poprzedza** zmiany cen dla 2 z 8 analizowanych spółek:
+
+| Spółka | Najlepszy lag | p-value | Interpretacja |
+|--------|--------------|---------|---------------|
+| **LPP.WA** | 1–9 dni | < 0.0001 | Silna zależność — sentyment dnia poprzedniego |
+| **CDR.WA** | 5–10 dni | 0.0001 | Sentyment poprzedza cenę o ~1–2 tygodnie |
+
+![Wyniki testu Grangera](data/processed/plot_granger_results.png)
+
+---
+
+### Heatmapa Korelacji: Sentyment(lag) vs Stopa Zwrotu
+Korelacja Pearsona między sentymentem z opóźnieniem a dzienną stopą zwrotu. LPP.WA wyróżnia się korelacją −0.77 przy lag=1.
+
+![Heatmapa korelacji](data/processed/plot_correlation_heatmap.png)
+
+---
+
+### Model ARIMAX — LPP.WA
+Dodanie sentymentu mediów jako zmiennej egzogennej do modelu ARIMA(0,0,1) poprawia dokładność prognozy o **8.5%** (p=0.0025).
+
+![ARIMAX vs ARIMA RMSE](data/processed/plot_LPP_rmse_comparison.png)
+
+![ARIMAX prognoza](data/processed/plot_LPP_arimax_vs_arima.png)
 
 ---
 
@@ -18,53 +50,27 @@ System automatycznie pobiera nagłówki newsów z polskich portali finansowych, 
 ```
 wig20-sentiment/
 │
-├── 📁 ingestion/                  # Moduł 1: Pobieranie danych
-│   ├── scraper_bankier.py         # Scraper nagłówków — Bankier.pl
-│   ├── scraper_money.py           # Scraper nagłówków — Money.pl
-│   ├── scraper_stockwatch.py      # Scraper — StockWatch.pl
-│   ├── fetcher_yfinance.py        # Pobieranie cen WIG20 (yfinance)
-│   └── pipeline_ingestion.py     # Orkiestrator — uruchamia wszystkie scrapery
+├── 📁 ingestion/               # Moduł 1: Pobieranie danych
+│   ├── scraper_bankier.py      # RSS Bankier.pl
+│   ├── scraper_googlenews.py   # Google News RSS per spółka
+│   ├── fetcher_yfinance.py     # Ceny WIG20 (yfinance)
+│   └── pipeline_ingestion.py  # Orkiestrator
 │
-├── 📁 processing/                 # Moduł 2: NLP i przetwarzanie
-│   ├── sentiment_vader.py         # Baseline: VADER (szybki, prosty)
-│   ├── sentiment_finbert.py       # Główny model: FinBERT (HuggingFace)
-│   ├── aggregator.py              # Agregacja sentymentu → dzienna liczba
-│   └── preprocessor.py           # Czyszczenie tekstu, tokenizacja
+├── 📁 processing/              # Moduł 2: NLP
+│   ├── sentiment_finbert.py    # FinBERT + tłumaczenie PL→EN
+│   └── aggregator.py          # Agregacja → dzienny sentyment
 │
-├── 📁 econometrics/               # Moduł 3: Analiza ekonometryczna
-│   ├── granger_causality.py       # Test przyczynowości Grangera
-│   ├── lag_analysis.py            # Analiza opóźnień (2h, 6h, 24h, 48h)
-│   ├── ols_model.py               # Regresja OLS: cena ~ sentiment_lag
-│   └── arimax_model.py            # Model ARIMAX z sentymentem jako egzogeną
+├── 📁 econometrics/            # Moduł 3: Analiza ekonometryczna
+│   ├── granger_causality.py   # Test przyczynowości Grangera
+│   └── arimax_model.py        # Model ARIMAX z sentymentem
 │
-├── 📁 visualization/              # Moduł 4: Wykresy i raport
-│   ├── dashboard.py               # Interaktywny dashboard (Plotly/Dash)
-│   ├── plot_correlation.py        # Wykresy korelacji cena-sentyment
-│   └── report_generator.py       # Automatyczny raport PDF
+├── 📁 notebooks/               # Wyniki i wizualizacje
+│   ├── 01_EDA.ipynb            # Eksploracyjna analiza danych
+│   └── 03_ARIMAX_Results.ipynb # Wyniki modelu ARIMAX
 │
-├── 📁 data/
-│   ├── raw/                       # Surowe dane (gitignore)
-│   │   ├── news_raw.csv
-│   │   └── prices_raw.csv
-│   └── processed/                 # Dane po przetworzeniu
-│       ├── sentiment_daily.csv    # Dzienny sentyment per spółka
-│       └── merged_dataset.csv     # Ceny + sentyment (gotowe do modeli)
-│
-├── 📁 notebooks/                  # Eksploracja i prezentacja wyników
-│   ├── 01_EDA.ipynb               # Eksploracyjna analiza danych
-│   ├── 02_NLP_Analysis.ipynb      # Porównanie VADER vs FinBERT
-│   └── 03_Econometrics.ipynb      # Wyniki testów i modeli
-│
-├── 📁 tests/                      # Testy jednostkowe
-│   ├── test_scrapers.py
-│   ├── test_sentiment.py
-│   └── test_econometrics.py
-│
-├── config.yaml                    # Konfiguracja: spółki, daty, parametry
-├── requirements.txt               # Zależności
-├── .env.example                   # Szablon zmiennych środowiskowych
-├── main.py                        # Punkt wejścia — uruchomienie całego pipeline
-└── README.md
+├── config.yaml                 # Konfiguracja spółek i parametrów
+├── requirements.txt
+└── main.py                     # Punkt wejścia pipeline
 ```
 
 ---
@@ -72,178 +78,107 @@ wig20-sentiment/
 ## 🔧 Stack Technologiczny
 
 | Warstwa | Technologia | Zastosowanie |
-|---|---|---|
-| **Ingestion** | `BeautifulSoup`, `requests`, `yfinance` | Scraping newsów, pobieranie cen |
-| **NLP** | `transformers` (FinBERT), `vaderSentiment` | Analiza sentymentu |
-| **Przetwarzanie** | `pandas`, `numpy` | Czyszczenie, agregacja danych |
-| **Ekonometria** | `statsmodels`, `scipy` | Granger, OLS, ARIMAX |
-| **Wizualizacja** | `plotly`, `dash`, `matplotlib` | Dashboard, wykresy |
-| **Środowisko** | `python-dotenv`, `loguru`, `pytest` | Konfiguracja, logi, testy |
+|---------|-------------|--------------|
+| **Ingestion** | `yfinance`, `BeautifulSoup`, `requests` | Ceny GPW, scraping newsów |
+| **NLP** | `transformers` (FinBERT), `deep-translator` | Sentyment PL→EN→FinBERT |
+| **Przetwarzanie** | `pandas`, `numpy` | Czyszczenie, agregacja, lagi |
+| **Ekonometria** | `statsmodels`, `scikit-learn` | Granger, ARIMA, ARIMAX |
+| **Wizualizacja** | `matplotlib`, `seaborn` | Wykresy, heatmapy |
+| **Utils** | `loguru`, `pyyaml`, `python-dotenv` | Logi, konfiguracja |
 
 ---
 
-## 📊 Przepływ Danych (Pipeline)
+## 📐 Metodologia
 
+### 1. Pobieranie Danych
+- **Ceny:** yfinance → 10 spółek WIG20, dane dzienne OHLCV
+- **Newsy:** Bankier.pl RSS + Google News RSS (per spółka, słowa kluczowe)
+- **NLP:** nagłówek PL → Google Translate → FinBERT → score [-1, +1]
+- **Agregacja:** średni dzienny sentyment per spółka + lagi 1–6 dni
+
+### 2. Test Grangera
+Sprawdzamy czy sentyment *poprzedza* zmiany cen (a nie tylko z nimi koreluje):
 ```
-[Bankier.pl / Money.pl]          [GPW / yfinance]
-        │                               │
-        ▼                               ▼
-  scraper_*.py                  fetcher_yfinance.py
-        │                               │
-        └──────────┬────────────────────┘
-                   ▼
-          preprocessor.py
-         (czyszczenie tekstu)
-                   │
-                   ▼
-          sentiment_finbert.py
-         (sentyment per nagłówek)
-                   │
-                   ▼
-            aggregator.py
-      (dzienny sentyment per spółka)
-                   │
-                   ▼
-          merged_dataset.csv
-     (ceny + sentyment + lagi)
-                   │
-          ┌────────┴────────┐
-          ▼                 ▼
-   granger_causality    arimax_model
-   lag_analysis         ols_model
-          │                 │
-          └────────┬────────┘
-                   ▼
-             dashboard.py
-          (wyniki + wizualizacje)
+H₀: sentyment NIE pomaga prognozować cen
+H₁: sentyment POMAGA prognozować ceny
 ```
+Test F-statystyki dla opóźnień 1–10 dni sesyjnych. Warunek wstępny: stacjonarność szeregów (test ADF).
+
+### 3. Model ARIMAX
+```
+log_return_t = ARIMA(p,d,q) + β · sentyment_{t-k} + ε_t
+```
+Porównanie ARIMA vs ARIMAX na zbiorze testowym (ostatnie 20% danych). Metryka jakości: RMSE.
 
 ---
 
 ## 🚀 Uruchomienie
 
-### Instalacja
 ```bash
 git clone https://github.com/wsitek00/WIG20-Sentiment-Analysis-Price-Prediction.git
-cd wig20-sentiment
+cd WIG20-Sentiment-Analysis-Price-Prediction
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 ```
 
+### Pełny pipeline
+```bash
+python -m ingestion.pipeline_ingestion    # Pobierz ceny i newsy
+python -m processing.sentiment_finbert   # Analiza sentymentu FinBERT
+python -m processing.aggregator          # Połącz dane
+python -m econometrics.granger_causality # Testy Grangera
+python -m econometrics.arimax_model      # Model ARIMAX
+```
+
 ### Konfiguracja
-```bash
-cp .env.example .env
-# Edytuj .env — na razie nie są wymagane żadne klucze API
-```
-
-### Uruchomienie pełnego pipeline
-```bash
-# Pobierz dane z ostatnich 30 dni
-python main.py --mode full --days 30
-
-# Tylko scraping newsów
-python main.py --mode ingest
-
-# Tylko analiza sentymentu (na istniejących danych)
-python main.py --mode sentiment
-
-# Uruchom dashboard
-python main.py --mode dashboard
+Edytuj `config.yaml` aby zmienić spółki, zakres dat lub parametry:
+```yaml
+ingestion:
+  days_back: 365   # Zmień dla dłuższej historii
+nlp:
+  translation_enabled: true
+econometrics:
+  max_lag_days: 10
 ```
 
 ---
 
-## 📐 Metodologia Ekonometryczna
+## 🏢 Monitorowane Spółki
 
-### 1. Test Przyczynowości Grangera
-Sprawdzamy, czy sentyment *poprzedza* zmiany cen (a nie tylko z nimi koreluje):
-```
-H₀: sentyment NIE pomaga prognozować cen (nie jest przyczyną w sensie Grangera)
-H₁: sentyment POMAGA prognozować ceny (jest przyczyną w sensie Grangera)
-```
-Testujemy dla opóźnień: 1, 2, 3, 5, 10 dni sesyjnych.
-
-### 2. Analiza Opóźnień (Lag Analysis)
-Szukamy optymalnego okna czasowego: przy którym opóźnieniu sentyment najsilniej koreluje ze zmianą ceny (korelacja Pearsona i Spearmana).
-
-### 3. Model ARIMAX
-```
-ΔCena_t = α + β₁·ΔCena_{t-1} + β₂·Sentyment_{t-k} + ε_t
-```
-Gdzie `k` to optymalne opóźnienie znalezione w kroku 2.
+| Ticker | Spółka | Sektor |
+|--------|--------|--------|
+| PKN.WA | PKN Orlen | Energia |
+| PKO.WA | PKO Bank Polski | Bankowość |
+| PZU.WA | PZU | Ubezpieczenia |
+| KGH.WA | KGHM | Surowce |
+| LPP.WA | LPP | Handel |
+| CDR.WA | CD Projekt | Gry / Technologia |
+| ALE.WA | Allegro | E-commerce |
+| MBK.WA | mBank | Bankowość |
+| DNP.WA | Dino Polska | Handel |
+| CPS.WA | Cyfrowy Polsat | Media / Telco |
 
 ---
 
-## 🏢 Monitorowane Spółki WIG20
+## ⚠️ Ograniczenia i Kierunki Rozwoju
 
-Projekt domyślnie śledzi 10 największych spółek z WIG20:
+**Obecne ograniczenia:**
+- Mała próba (90 dni = ~57 sesji) — wyniki wymagają walidacji na dłuższym szeregu
+- FinBERT wytrenowany na tekstach angielskich — tłumaczenie PL→EN wprowadza szum
+- Pojedynczy split train/test zamiast rolling window cross-validation
 
-| Ticker GPW | Spółka | Sektor |
-|---|---|---|
-| PKN | PKN Orlen | Energia |
-| PKO | PKO Bank Polski | Bankowość |
-| PZU | PZU | Ubezpieczenia |
-| KGH | KGHM | Surowce |
-| LPP | LPP | Handel |
-| CDR | CD Projekt | Gry/Technologia |
-| ALE | Allegro | E-commerce |
-| MBK | mBank | Bankowość |
-| DNP | Dino Polska | Handel |
-| CPS | Cyfrowy Polsat | Media/Telco |
-
----
-
-## 📈 Przykładowe Wyniki (placeholder)
-
-Po uruchomieniu pipeline w folderze `data/processed/` pojawi się `merged_dataset.csv` o strukturze:
-
-```
-date        | ticker | close | return_1d | sentiment_avg | sentiment_lag1 | sentiment_lag2
-2024-01-15  | PKO    | 47.20 | +1.2%     | 0.34          | -0.12          | 0.08
-2024-01-15  | CDR    | 168.50| -0.8%     | -0.67         | 0.21           | -0.45
-```
-
----
-
-## 🧪 Testy
-
-```bash
-pytest tests/ -v
-pytest tests/test_scrapers.py      # Test czy scrapery działają
-pytest tests/test_sentiment.py     # Test modelu NLP
-```
-
----
-
-## 📝 Roadmap
-
-- [x] Struktura projektu i dokumentacja
-- [ ] Implementacja scraperów (Bankier, Money.pl)
-- [ ] Integracja FinBERT (model wielojęzyczny lub przetłumaczony)
-- [ ] Moduł agregacji dziennej
-- [ ] Testy Grangera i lag analysis
-- [ ] Model ARIMAX
-- [ ] Dashboard Plotly/Dash
-- [ ] Raport PDF z wynikami
-
----
-
-## ⚠️ Uwagi Implementacyjne
-
-**FinBERT a język polski:** Oryginalny FinBERT jest wytrenowany na tekstach angielskich. Możliwe podejścia:
-1. **Tłumaczenie nagłówków** — `deep-translator` (Google Translate API, darmowy tier) przed podaniem do FinBERT
-2. **HerBERT** — polski model BERT od Allegro (`allegro/herbert-base-cased`), fine-tune na polskich tekstach finansowych
-3. **Podejście hybrydowe** — HerBERT do klasyfikacji + VADER na przetłumaczonych tekstach jako baseline
-
-Rekomendacja: użyj tłumaczenia + FinBERT jako głównego modelu, HerBERT jako porównania — to świetny materiał do sekcji "Porównanie modeli" w portfolio.
+**Planowane rozszerzenia:**
+- [ ] Rozszerzenie do 2 lat historii (`days_back: 730`)
+- [ ] Porównanie FinBERT vs HerBERT (polski BERT od Allegro)
+- [ ] Rolling window cross-validation
+- [ ] Interaktywny dashboard (Plotly/Dash)
 
 ---
 
 ## 👤 Autor
 
-Wojciech Sitek
-
+**Wojciech Sitek**
 
 ---
 
