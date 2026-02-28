@@ -17,6 +17,7 @@ numpy==1.26.4
 # Econometrics
 statsmodels==0.14.1
 scipy==1.13.0
+scikit-learn>=1.4.0
 
 # Visualization
 plotly==5.20.0
